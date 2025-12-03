@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinamik Bingo (Dark Mode)</title>
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #4caf50;
+            --item-bg: #2c2c2c;
+            --item-hover: #3a3a3a;
+            --checked-bg: #1b5e20;
+            --win-bg: #00e676; 
+            --win-text: #000;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            text-align: center;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 20px; color: var(--accent-color); }
+
+        /* Ayarlar Ekranı */
+        #setup-screen {
+            background: var(--container-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        /* Oyun Ekranı */
+        #game-screen {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        textarea {
+            width: 90%;
+            height: 120px;
+            padding: 10px;
+            font-size: 16px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            margin-top: 10px;
+            resize: vertical;
+        }
+
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            text-align: center;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover { background: #43a047; }
+
+        button.secondary {
+            background: #555;
+            margin-bottom: 20px;
+        }
+        button.secondary:hover { background: #777; }
+
+        /* Bingo Izgarası */
+        .bingo {
+            display: grid;
+            gap: 10px;
+            max-width: 800px;
+            width: 95%;
+            margin: auto;
+        }
+
+        .item {
+            background: var(--item-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none; /* Metin seçimini engeller */
+            text-align: center;
+            border: 2px solid transparent;
+            min-height: 50px;
+            position: relative;
+        }
+
+        .item:hover { background: var(--item-hover); }
+
+        /* İşaretlenmiş Durum */
+        .item.checked {
+            background: var(--checked-bg);
+            border-color: #4caf50;
+            color: #fff;
+        }
+
+        /* Bingo Tamamlanmış (Parlak Yeşil) */
+        .item.win-highlight {
+            background: var(--win-bg) !important;
+            color: var(--win-text) !important;
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.6);
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        /* Input'u gizliyoruz ama DOM'da kalıyor */
+        input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <h1>Dinamik Bingo Oluşturucu</h1>
+        
+        <label>Satır: </label>
+        <input type="number" id="rows" value="3" min="1" max="10">
+        <span style="margin: 0 10px;">x</span>
+        <label>Sütun: </label>
+        <input type="number" id="cols" value="3" min="1" max="10">
+
+        <br><br>
+
+        <label style="display:block; text-align:left; margin-left: 5%;">Görevleri yaz (her satır bir görev):</label>
+        <textarea id="taskInput" placeholder="Her satıra bir görev yazın...">Görev 1
+Görev 2
+Görev 3
+Görev 4
+Görev 5
+Görev 6
+Görev 7
+Görev 8
+Görev 9</textarea>
+
+        <button onclick="createBingo()">Bingo Oluştur</button>
+    </div>
+
+    <div id="game-screen">
+        <button class="secondary" onclick="resetGame()">← Yeni Oyun Kur</button>
+        <div id="bingoContainer"></div>
+    </div>
+
+<script>
+    let checkboxes = []; // Global dizi
+
+    function createBingo() {
+        const rows = parseInt(document.getElementById("rows").value);
+        const cols = parseInt(document.getElementById("cols").value);
+
+        const tasks = document.getElementById("taskInput").value
+                      .split("\n")
+                      .map(t => t.trim())
+                      .filter(t => t.length > 0);
+
+        const totalNeeded = rows * cols;
+
+        if (tasks.length < totalNeeded) {
+            alert("⚠ En az " + totalNeeded + " görev yazmalısın! (Şu an: " + tasks.length + ")");
+            return;
+        }
+
+        // Ekranları değiştir
+        document.getElementById("setup-screen").style.display = "none";
+        document.getElementById("game-screen").style.display = "flex";
+
+        let container = document.getElementById("bingoContainer");
+        container.innerHTML = ""; 
+
+        const grid = document.createElement("div");
+        grid.className = "bingo";
+        grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+        checkboxes = []; // Diziyi sıfırla
+
+        for (let i = 0; i < totalNeeded; i++) {
+            const label = document.createElement("label");
+            label.className = "item";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            
+            // DÜZELTME: Click yerine 'change' olayını dinliyoruz.
+            // Label'a tıklayınca checkbox otomatik değişir, biz sadece değişince ne olacağını yazıyoruz.
+            checkbox.addEventListener("change", () => {
+                updateVisuals(rows, cols);
+            });
+
+            label.appendChild(checkbox);
+            
+            // Metni bir span içine alalım ki stil vermek kolay olsun (opsiyonel)
+            const textSpan = document.createElement("span");
